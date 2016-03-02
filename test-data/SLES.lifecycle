@@ -1,0 +1,7 @@
+# test data for SLES product
+# this should be installed in /var/lib/lifecycle/data/SLES.lifecycle
+# format: name,version,date
+# version can contain wildcard character *
+
+aaa_base,       13.2*,           2016-05-05
+kernel-default, 3.12.51-60.25.1, 2016-05-01

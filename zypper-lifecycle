@@ -1,0 +1,233 @@
+#!/usr/bin/ruby
+
+require 'rexml/document'
+require 'fileutils'
+require 'open3'
+require 'csv'
+require 'optparse'
+require 'optparse/time'
+
+module SUSE
+  module Zypper
+    class << self
+
+      def call(args, quiet = true)
+        cmd = "zypper #{args}"
+        output, error, status = Open3.capture3({ 'LC_ALL' => 'C' }, cmd) {|_stdin, stdout, _stderr, _wait_thr| stdout.read }
+
+        # Don't fail when zypper exits with 104 (no product found) or 6 (no repositories)
+        valid_exit_codes = [0, 104, 6]
+        # Catching interactive failures of zypper. --non-interactive always returns with exit code 0 here
+        if !valid_exit_codes.include?(status.exitstatus) || error.include?('ABORT request')
+          error = error.empty? ? output.strip : error.strip
+          print error
+#        e = (cmd.include? 'zypper') ? Connect::ZypperError.new(status.exitstatus, error) : Connect::SystemCallError
+#        raise e, error
+        end
+        output.strip unless quiet
+      end
+
+      def xml_call(args, root, subpath = [])
+        zypper_out = call(args, false)
+        xml_doc = REXML::Document.new(zypper_out, compress_whitespace: [])
+        ary_of_products_hashes = xml_doc.root.elements[root].elements.map do |e|
+          h = {}
+          e.attributes.each { |name, value| h[name.to_sym] = value } # add attributes
+          subpath.each do |sp|
+            e.elements[sp].attributes.each { |name, value| h["#{sp}_#{name}".to_sym] = value } # add attributes of requested sub-elements
+          end
+          h
+        end
+      end
+
+    end
+  end
+
+  class Lifecycle
+    def load_zypper_data
+      repo_list = Zypper::xml_call("--no-refresh -x lr", 'repo-list')
+      repo_alias = {}
+      repo_list.each do |r|
+        repo_alias[r[:alias]] = r[:name]
+        repo_alias[r[:name]] = r[:name]
+      end
+
+      product_list = Zypper::xml_call("--no-refresh -x pd ", 'product-list', ['endoflife'])
+      product_by_repo = {}
+      @installed_products = {}
+      product_list.each do |p|
+        p[:endoflife_time_t] = nil if p[:endoflife_time_t] == '0'
+        repo = repo_alias[p[:repo]]
+        product_by_repo[repo] = p
+        @installed_products[p[:name]] =  p if p[:installed] == "true"
+      end
+
+      package_list = Zypper::xml_call("--no-refresh -x se -s -t package", 'search-result/solvable-list')
+      @installed_package = {}
+      package_list.each do |p|
+        if p[:kind] == 'package' && p[:status] == 'installed'
+          @installed_package[p[:name]] ||= []
+          @installed_package[p[:name]] << p
+        end
+      end
+
+      #hack - guess that repos <name>-Pool and <name>-Updates are the same product
+      repo_alias.values.each do |name|
+        updates = name.gsub(/-Pool/, '-Updates')
+        if updates != name && product_by_repo[name] && !product_by_repo[updates]
+          product_by_repo[updates] = product_by_repo[name]
+          print "#{updates} is an update repo for #{product_by_repo[name][:name]}\n"
+        end
+      end
+
+      update_list = Zypper::xml_call("--no-refresh -x lu", 'update-status/update-list', ['source'])
+      update_list.each do |u|
+        (@installed_package[u[:name]] || []).each do |p|
+          if p[:arch] == u[:arch]
+            p[:update_edition] = u[:edition]
+            p[:repository] = repo_alias[u[:source_alias]] if p[:repository] == "(System Packages)"
+          end
+        end
+      end
+
+      package_list.each do |p|
+        p[:product] = product_by_repo[p[:repository]]
+      end
+
+    end
+
+    def load_lifecycle_data()
+      @installed_products.values.each do |product|
+        file = "/var/lib/lifecycle/data/#{product[:name]}.lifecycle"
+        print "trying to load #{file}... "
+        begin
+          CSV.foreach(file, {:skip_blanks => true, :skip_lines => /^\s*#/ }) do |line|
+            name, version, date = line.map(&:strip)
+            date = Time.parse(date).strftime("%s")
+            version_re = Regexp.new( '^' + Regexp.quote(version).gsub(/\\\*/, '.*') + '$')
+            #print "match #{name} #{version_re}\n"
+            (@installed_package[name] || []).each do |p|
+              #print "#{p}\n"
+              if version_re.match(p[:edition])
+                p[:package_eol] = date
+              end
+              if version_re.match(p[:update_edition])
+                p[:update_package_eol] = date
+              end
+            end
+          end
+          print "ok\n"
+        rescue Exception => e
+          print "#{e.message}\n"
+        end
+      end
+    end
+
+    def solve_package_eol()
+      @installed_package.values.flatten.each do |p|
+        eol = nil
+        eol = p[:package_eol] if p[:package_eol] # eol specified in lifecycle file
+        eol = '0' if !eol && p[:update_edition] # update exists -> this package is expired
+        eol = p[:product][:endoflife_time_t] if !eol && p[:product] && p[:product][:endoflife_time_t] # default to product eol
+        p[:eol] = eol.to_i if eol
+        if p[:update_edition]
+          up_eol = nil
+          up_eol = p[:update_package_eol] if p[:update_package_eol] # eol specified in lifecycle file
+          up_eol = p[:product][:endoflife_time_t] if !up_eol && p[:product] && p[:product][:endoflife_time_t] # default to product eol
+          p[:update_eol] = up_eol.to_i if up_eol
+        end
+      end
+    end
+
+    def print_product(p)
+      eol = '-'
+      eol = Time.at(p[:endoflife_time_t].to_i).strftime('%F') if p[:endoflife_time_t]
+      printf("%-55s %s\n", p[:summary], eol)
+    end
+
+    def print_package(p)
+      eol = '-'
+      eol = Time.at(p[:eol]).strftime('%F') if p[:eol] && p[:eol] > 0
+      eol = 'now' if p[:eol] && p[:eol] == 0
+      up = ''
+      if p[:update_edition]
+        up = ", available update to #{p[:update_edition]}"
+        up_eol = ''
+        up_eol = Time.at(p[:update_eol]).strftime('%F') if p[:update_eol]
+      end
+      printf("%-55s %s%-20s %s\n", "#{p[:name]}-#{p[:edition]}", eol, up, up_eol)
+    end
+
+    def report()
+      print "\nProduct end of support:\n"
+      @installed_products.values.each do |product|
+        print_product(product)
+      end
+      print "\nPackage end of support if different from product:\n"
+      @installed_package.values.flatten.each do |p|
+        print_package(p) if p[:package_eol] || p[:update_edition]
+      end
+    end
+
+    def report_packages(list)
+      print "\nPackage end of support:\n"
+      list.each do |name|
+        p_list = @installed_package[name]
+        if !p_list
+          print "#{name} is not installed\n"
+        else
+          p_list.each { |p| print_package(p) }
+        end
+      end
+    end
+
+    def report_deadline(date)
+      date_ts = date.strftime("%s").to_i
+      date_str = Time.at(date_ts).strftime('%F')
+
+      products = @installed_products.values.select {|p| p[:endoflife_time_t] && p[:endoflife_time_t].to_i <= date_ts }
+      if products.length > 0
+        print "\nProduct end of support before #{date_str}:\n"
+        products.sort_by.with_index { |p, idx| [p[:endoflife_time_t].to_i, idx] }.each do |product|
+          print_product(product)
+        end
+      end
+      packages = @installed_package.values.flatten.select {|p| p[:eol] && p[:eol] <= date_ts }
+      if packages.length > 0
+        print "\nPackage end of support before #{date_str}:\n"
+        packages.sort_by.with_index { |p, idx| [p[:eol], idx] }.each do |p|
+          print_package(p) if p[:package_eol] || p[:update_edition]
+        end
+      end
+    end
+
+  end
+end
+
+options = {}
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: zypper lifecycle --days N | --date <date> | <package> ..."
+
+  opts.on("--days N", Integer, "Show packages/products with end of support before N days from now") do |d|
+    options[:date] = Time.now + d * 60 * 60 * 24
+  end
+  opts.on("--date D", Time, "Show packages/products with end of support before D") do |d|
+    options[:date] = d
+  end
+end.parse!
+
+lifecycle = SUSE::Lifecycle.new
+lifecycle.load_zypper_data
+lifecycle.load_lifecycle_data
+lifecycle.solve_package_eol
+
+if options[:date]
+  lifecycle.report_deadline(options[:date])
+elsif ARGV.empty?
+  lifecycle.report
+else
+  lifecycle.report_packages(ARGV)
+end
+
+

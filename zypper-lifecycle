@@ -44,6 +44,11 @@ module SUSE
   end
 
   class Lifecycle
+
+    def initialize(verbose)
+        @verbose = verbose
+    end
+
     def load_zypper_data
       repo_list = Zypper::xml_call("--no-refresh -x lr", 'repo-list')
       repo_alias = {}
@@ -76,7 +81,7 @@ module SUSE
         updates = name.gsub(/-Pool/, '-Updates')
         if updates != name && product_by_repo[name] && !product_by_repo[updates]
           product_by_repo[updates] = product_by_repo[name]
-          print "#{updates} is an update repo for #{product_by_repo[name][:name]}\n"
+          print "#{updates} is an update repo for #{product_by_repo[name][:name]}\n" if @verbose
         end
       end
 
@@ -99,7 +104,7 @@ module SUSE
     def load_lifecycle_data()
       @installed_products.values.each do |product|
         file = "/var/lib/lifecycle/data/#{product[:name]}.lifecycle"
-        print "trying to load #{file}... "
+        print "trying to load #{file}... " if @verbose
         begin
           CSV.foreach(file, {:skip_blanks => true, :skip_lines => /^\s*#/ }) do |line|
             name, version, date = line.map(&:strip)
@@ -116,9 +121,9 @@ module SUSE
               end
             end
           end
-          print "ok\n"
+          print "ok\n" if @verbose
         rescue Exception => e
-          print "#{e.message}\n"
+          print "#{e.message}\n" if @verbose
         end
       end
     end
@@ -207,7 +212,7 @@ end
 options = {}
 
 OptionParser.new do |opts|
-  opts.banner = "Usage: zypper lifecycle --days N | --date <date> | <package> ..."
+  opts.banner = "Usage: zypper lifecycle [ -v | --verbose ] --days N | --date <date> | <package> ..."
 
   opts.on("--days N", Integer, "Show packages/products with end of support before N days from now") do |d|
     options[:date] = Time.now + d * 60 * 60 * 24
@@ -215,9 +220,12 @@ OptionParser.new do |opts|
   opts.on("--date D", Time, "Show packages/products with end of support before D") do |d|
     options[:date] = d
   end
+  opts.on("-v", "--[no-]verbose", "Run verbosely") do |v|
+    options[:verbose] = v
+  end
 end.parse!
 
-lifecycle = SUSE::Lifecycle.new
+lifecycle = SUSE::Lifecycle.new(options[:verbose])
 lifecycle.load_zypper_data
 lifecycle.load_lifecycle_data
 lifecycle.solve_package_eol

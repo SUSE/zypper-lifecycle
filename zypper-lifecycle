@@ -45,6 +45,11 @@ module SUSE
 
   class Lifecycle
 
+    # allow sorting by numeric value
+    NowTS   = 0
+    TbdTS   = 1000000000000000
+    NeverTS = 1000000000000001
+
     def initialize(verbose)
         @verbose = verbose
     end
@@ -131,10 +136,12 @@ module SUSE
     def solve_package_eol()
       @installed_package.values.flatten.each do |p|
         eol = nil
-        eol = p[:package_eol] if p[:package_eol] # eol specified in lifecycle file
-        eol = '0' if !eol && p[:update_edition] # update exists -> this package is expired
-        eol = p[:product][:endoflife_time_t] if !eol && p[:product] && p[:product][:endoflife_time_t] # default to product eol
-        p[:eol] = eol.to_i if eol
+        eol = p[:package_eol].to_i if p[:package_eol] # eol specified in lifecycle file
+        eol = NowTS if !eol && p[:update_edition] # update exists -> this package is expired
+        eol = p[:product][:endoflife_time_t].to_i if !eol && p[:product] && p[:product][:endoflife_time_t] # default to product eol
+        eol = NeverTS if !eol
+        p[:eol] = eol
+
         if p[:update_edition]
           up_eol = nil
           up_eol = p[:update_package_eol] if p[:update_package_eol] # eol specified in lifecycle file
@@ -151,9 +158,11 @@ module SUSE
     end
 
     def print_package(p)
-      eol = '-'
-      eol = Time.at(p[:eol]).strftime('%F') if p[:eol] && p[:eol] > 0
-      eol = 'now' if p[:eol] && p[:eol] == 0
+      eol = nil
+      eol = 'N/A' if p[:eol] == NeverTS
+      eol = 'TBD' if p[:eol] == TbdTS
+      eol = 'Now' if p[:eol] == NowTS
+      eol = Time.at(p[:eol]).strftime('%F') if !eol
       up = ''
       if p[:update_edition]
         up = ", available update to #{p[:update_edition]}"

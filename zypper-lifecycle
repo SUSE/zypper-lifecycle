@@ -66,7 +66,9 @@ module SUSE
       product_by_repo = {}
       @installed_products = {}
       product_list.each do |p|
-        p[:endoflife_time_t] = nil if p[:endoflife_time_t] == '0'
+        p[:endoflife_time_t] = p[:endoflife_time_t].to_i
+        p[:endoflife_time_t] = nil if p[:endoflife_time_t] == 0
+        p[:sp_endoflife_time_t] = TbdTS # fixme: zypper currently does not provide this date
         repo = repo_alias[p[:repo]]
         product_by_repo[repo] = p
         @installed_products[p[:name]] =  p if p[:installed] == "true"
@@ -104,6 +106,11 @@ module SUSE
         p[:product] = product_by_repo[p[:repository]]
       end
 
+      # if there are the same versions of a package in multiple products, keep the one with longest product life
+      @installed_package.values.each do |p_list|
+        p_list.sort_by!{ |p| [p[:edition], p[:product] ? p[:product][:sp_endoflife_time_t] : 0, p[:product] ? p[:product][:endoflife_time_t] : 0] }.reverse!.uniq!{ |p| p[:edition] }
+      end
+
     end
 
     def load_lifecycle_data()
@@ -138,36 +145,46 @@ module SUSE
         eol = nil
         eol = p[:package_eol].to_i if p[:package_eol] # eol specified in lifecycle file
         eol = NowTS if !eol && p[:update_edition] # update exists -> this package is expired
-        eol = p[:product][:endoflife_time_t].to_i if !eol && p[:product] && p[:product][:endoflife_time_t] # default to product eol
+        eol = p[:product][:sp_endoflife_time_t].to_i if !eol && p[:product] && p[:product][:sp_endoflife_time_t] # default to product eol
         eol = NeverTS if !eol
         p[:eol] = eol
 
         if p[:update_edition]
           up_eol = nil
           up_eol = p[:update_package_eol] if p[:update_package_eol] # eol specified in lifecycle file
-          up_eol = p[:product][:endoflife_time_t] if !up_eol && p[:product] && p[:product][:endoflife_time_t] # default to product eol
+          up_eol = p[:product][:sp_endoflife_time_t] if !up_eol && p[:product] && p[:product][:sp_endoflife_time_t] # default to product eol
           p[:update_eol] = up_eol.to_i if up_eol
         end
       end
     end
 
+    def eol_string(eol_ts)
+      eol = ''
+      eol = '-' if eol_ts == NeverTS
+      eol = 'TBD*' if eol_ts == TbdTS
+      eol = 'Now' if eol_ts == NowTS
+      eol = Time.at(eol_ts).strftime('%F') if eol_ts && eol == ''
+      eol
+    end
+
     def print_product(p)
-      eol = '-'
-      eol = Time.at(p[:endoflife_time_t].to_i).strftime('%F') if p[:endoflife_time_t]
-      printf("%-55s %s\n", p[:summary], eol)
+      indent = ''
+      if p[:productline] != ''
+        eol = eol_string(p[:endoflife_time_t])
+        printf("%-55s %s\n", p[:productline], eol)
+        indent = '  '
+      end
+      eol = eol_string(p[:sp_endoflife_time_t])
+      printf("%-55s %s\n", indent + p[:summary], eol)
     end
 
     def print_package(p)
-      eol = nil
-      eol = 'N/A' if p[:eol] == NeverTS
-      eol = 'TBD' if p[:eol] == TbdTS
-      eol = 'Now' if p[:eol] == NowTS
-      eol = Time.at(p[:eol]).strftime('%F') if !eol
+      eol = eol_string(p[:eol])
       up = ''
       if p[:update_edition]
         up = ", available update to #{p[:update_edition]}"
         up_eol = ''
-        up_eol = Time.at(p[:update_eol]).strftime('%F') if p[:update_eol]
+        up_eol = eol_string(p[:update_eol]) if p[:update_eol]
       end
       printf("%-55s %s%-20s %s\n", "#{p[:name]}-#{p[:edition]}", eol, up, up_eol)
     end
@@ -181,6 +198,7 @@ module SUSE
       @installed_package.values.flatten.each do |p|
         print_package(p) if p[:package_eol] || p[:update_edition]
       end
+      print "\n*) See http://www.suse.com/lifecycle for latest information\n"
     end
 
     def report_packages(list)
@@ -193,6 +211,7 @@ module SUSE
           p_list.each { |p| print_package(p) }
         end
       end
+      print "\n*) See http://www.suse.com/lifecycle for latest information\n"
     end
 
     def report_deadline(date)
@@ -213,6 +232,7 @@ module SUSE
           print_package(p) if p[:package_eol] || p[:update_edition]
         end
       end
+      print "\n*) See http://www.suse.com/lifecycle for latest information\n"
     end
 
   end

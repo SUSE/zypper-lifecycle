@@ -194,9 +194,14 @@ module SUSE
       @installed_products.values.each do |product|
         print_product(product)
       end
-      print "\nPackage end of support if different from product:\n"
-      @installed_package.values.flatten.each do |p|
-        print_package(p) if p[:package_eol] || p[:update_edition]
+      packages = @installed_package.values.flatten.select {|p| p[:package_eol] || p[:update_edition] }
+      if packages.length > 0
+        print "\nPackage end of support if different from product:\n"
+        packages.sort_by.with_index { |p, idx| [p[:eol], idx] }.each do |p|
+          print_package(p) if p[:package_eol] || p[:update_edition]
+        end
+      else
+        print "\nNo packages with end of support different from product.\n"
       end
       print "\n*) See http://www.suse.com/lifecycle for latest information\n"
     end
@@ -218,12 +223,14 @@ module SUSE
       date_ts = date.strftime("%s").to_i
       date_str = Time.at(date_ts).strftime('%F')
 
-      products = @installed_products.values.select {|p| p[:endoflife_time_t] && p[:endoflife_time_t].to_i <= date_ts }
+      products = @installed_products.values.select {|p| p[:endoflife_time_t] && p[:endoflife_time_t].to_i <= date_ts || p[:sp_endoflife_time_t] && p[:sp_endoflife_time_t].to_i <= date_ts}
       if products.length > 0
         print "\nProduct end of support before #{date_str}:\n"
         products.sort_by.with_index { |p, idx| [p[:endoflife_time_t].to_i, idx] }.each do |product|
           print_product(product)
         end
+      else
+        print "\nNo products with end of support before #{date_str}.\n"
       end
       packages = @installed_package.values.flatten.select {|p| p[:eol] && p[:eol] <= date_ts }
       if packages.length > 0
@@ -231,6 +238,8 @@ module SUSE
         packages.sort_by.with_index { |p, idx| [p[:eol], idx] }.each do |p|
           print_package(p) if p[:package_eol] || p[:update_edition]
         end
+      else
+        print "\nNo packages with end of support before #{date_str}.\n"
       end
       print "\n*) See http://www.suse.com/lifecycle for latest information\n"
     end

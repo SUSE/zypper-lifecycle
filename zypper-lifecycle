@@ -238,7 +238,7 @@ module SUSE
       else
         print "\nNo packages with end of support different from product.\n"
       end
-      print "\n*) See http://www.suse.com/lifecycle for latest information\n"
+      print "\n*) See https://www.suse.com/lifecycle for latest information\n"
     end
 
     def report_packages(list)

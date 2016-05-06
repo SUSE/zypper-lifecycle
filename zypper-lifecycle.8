@@ -1,0 +1,24 @@
+.\" Manpage for zypper-lifecycle.
+.TH man 8 "18 Apr 2016" "1.0" "zypper-lifecycle man page"
+.SH NAME
+zypper-lifecycle \- products and packages lifecycle information
+.SH SYNOPSIS
+zypper lifecycle [ -v | --verbose ] --days N | --date <date> | <package> ...
+.SH DESCRIPTION
+zypper-lifecycle shows an overview of products and packages lifecycle
+.SH OPTIONS
+.TP
+.B --days N
+Show packages/products with end of support before N days from now
+.TP
+.B --date D
+Show packages/products with end of support before D
+.TP
+.B  -v, --[no-]verbose
+Run verbosely
+.SH SEE ALSO
+zypper(8)
+.SH BUGS
+No known bugs.
+.SH AUTHOR
+Vladimir Nadvornik <nadvornik@suse.cz>

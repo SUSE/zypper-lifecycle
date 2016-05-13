@@ -56,6 +56,7 @@ module SUSE
 
     def initialize(verbose)
         @verbose = verbose
+        @retval = 0
     end
 
     def load_zypper_data
@@ -139,8 +140,11 @@ module SUSE
             end
           end
           print "ok\n" if @verbose
-        rescue Exception => e
+        rescue Errno::ENOENT => e
           print "#{e.message}\n" if @verbose
+        rescue Exception => e
+          print "\nError parsing #{file}: #{e.message}\n"
+          @retval = 2
         end
       end
     end
@@ -247,6 +251,7 @@ module SUSE
         p_list = @installed_package[name]
         if !p_list
           print "#{name} is not installed\n"
+          @retval = 1
         else
           p_list.each { |p| print_package(p) }
         end
@@ -274,6 +279,10 @@ module SUSE
         print "\nNo packages with end of support before #{date_str}.\n"
       end
       print "\n*) See https://www.suse.com/lifecycle for latest information\n"
+    end
+
+    def exit_val()
+      exit @retval
     end
 
   end
@@ -308,4 +317,4 @@ else
   lifecycle.report_packages(ARGV)
 end
 
-
+lifecycle.exit_val

@@ -1,4 +1,11 @@
 -------------------------------------------------------------------
+Fri May 13 08:32:03 UTC 2016 - nadvornik@suse.com
+
+- version 0.2
+- fixed return value (bsc#979322)
+- do not ignore errors on parsing of lifecycle data (bsc#979431)
+
+-------------------------------------------------------------------
 Fri May  6 09:30:32 UTC 2016 - nadvornik@suse.com
 
 - initial version 0.1 (fate#320597)

@@ -34,6 +34,7 @@ module SUSE
           h = {}
           e.attributes.each { |name, value| h[name.to_sym] = value } # add attributes
           subpath.each do |sp|
+            next if e.elements[sp].nil?
             e.elements[sp].attributes.each { |name, value| h["#{sp}_#{name}".to_sym] = value } # add attributes of requested sub-elements
             if e.elements[sp].has_text?()
               h["#{sp}".to_sym] = e.elements[sp].get_text()
@@ -52,7 +53,7 @@ module SUSE
     NowTS   = 0
     NaTS    = 1000000000000000
     NeverTS = 1000000000000001
-    ProductFormatStr = "%-55s %-20s %s\n"
+    ProductFormatStr = "%-55s %s\n"
 
     def initialize(verbose)
         @verbose = verbose
@@ -72,9 +73,12 @@ module SUSE
       product_by_repo = {}
       @installed_products = {}
       product_list.each do |p|
-        p[:endoflife_time_t] = p[:endoflife_time_t].to_i
-        p[:endoflife_time_t] = NeverTS if p[:endoflife_time_t] == 0
-        p[:sp_endoflife_time_t] = NaTS # fixme: zypper currently does not provide this date
+        if !p.key?(:endoflife_time_t)
+           p[:endoflife_time_t] = NeverTS
+        else
+          p[:endoflife_time_t] = p[:endoflife_time_t].to_i
+          p[:endoflife_time_t] = NaTS if p[:endoflife_time_t] == 0
+        end
         repo = repo_alias[p[:repo]]
         product_by_repo[repo] = p
         @installed_products[p[:name]] =  p if p[:installed] == "true"
@@ -114,7 +118,7 @@ module SUSE
 
       # if there are the same versions of a package in multiple products, keep the one with longest product life
       @installed_package.values.each do |p_list|
-        p_list.sort_by!{ |p| [p[:edition], p[:product] ? p[:product][:sp_endoflife_time_t] : 0, p[:product] ? p[:product][:endoflife_time_t] : 0] }.reverse!.uniq!{ |p| p[:edition] }
+        p_list.sort_by!{ |p| [p[:edition], p[:product] ? p[:product][:endoflife_time_t] : 0] }.reverse!.uniq!{ |p| p[:edition] }
       end
 
     end
@@ -159,14 +163,14 @@ module SUSE
           eol = NowTS if eol <= now
         end
         eol = NowTS if !eol && p[:update_edition] # update exists -> this package is expired
-        eol = p[:product][:sp_endoflife_time_t].to_i if !eol && p[:product] && p[:product][:sp_endoflife_time_t] # default to product eol
+        eol = p[:product][:endoflife_time_t].to_i if !eol && p[:product] && p[:product][:endoflife_time_t] # default to product eol
         eol = NeverTS if !eol
         p[:eol] = eol
 
         if p[:update_edition]
           up_eol = nil
           up_eol = p[:update_package_eol] if p[:update_package_eol] # eol specified in lifecycle file
-          up_eol = p[:product][:sp_endoflife_time_t] if !up_eol && p[:product] && p[:product][:sp_endoflife_time_t] # default to product eol
+          up_eol = p[:product][:endoflife_time_t] if !up_eol && p[:product] && p[:product][:endoflife_time_t] # default to product eol
           p[:update_eol] = up_eol.to_i if up_eol
         end
       end
@@ -186,7 +190,7 @@ module SUSE
 
     def print_product(p)
       vendor_suse = Regexp.new("^SUSE").match(p[:vendor])
-      printf(ProductFormatStr, p[:summary], eol_string(p[:sp_endoflife_time_t], vendor_suse) , eol_string(p[:endoflife_time_t], vendor_suse))
+      printf(ProductFormatStr, p[:summary], eol_string(p[:endoflife_time_t], vendor_suse))
     end
 
     def print_package(p)
@@ -208,21 +212,21 @@ module SUSE
       extensions = products.select{ |p| p[:registerflavor] == 'extension'}.sort_by.with_index { |p, idx| [p[:endoflife_time_t].to_i, idx] }
 
       if base_products.length > 0
-        printf("\n" + ProductFormatStr, "Product #{msg}", "Service pack EOL", "General EOL")
+        printf("\n" + ProductFormatStr, "Product #{msg}", "")
         base_products.each do |product|
           print_product(product)
         end
       end
 
       if modules.length > 0
-        printf("\n" + ProductFormatStr, "Module #{msg}", "Service pack EOL", "General EOL")
+        printf("\n" + ProductFormatStr, "Module #{msg}", "")
         modules.each do |product|
           print_product(product)
         end
       end
 
       if extensions.length > 0
-        printf("\n" + ProductFormatStr, "Extension #{msg}", "Service pack EOL", "General EOL")
+        printf("\n" + ProductFormatStr, "Extension #{msg}", "")
         extensions.each do |product|
           print_product(product)
         end
@@ -263,7 +267,7 @@ module SUSE
       date_ts = date.strftime("%s").to_i
       date_str = Time.at(date_ts).strftime('%F')
 
-      products = @installed_products.values.select {|p| p[:endoflife_time_t] && p[:endoflife_time_t].to_i <= date_ts || p[:sp_endoflife_time_t] && p[:sp_endoflife_time_t].to_i <= date_ts}
+      products = @installed_products.values.select {|p| p[:endoflife_time_t] && p[:endoflife_time_t].to_i <= date_ts}
       if products.length > 0
         report_products(products, "end of support before #{date_str}")
       else

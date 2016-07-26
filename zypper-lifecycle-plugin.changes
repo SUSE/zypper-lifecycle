@@ -1,4 +1,11 @@
 -------------------------------------------------------------------
+Tue Jul 26 10:43:22 UTC 2016 - nadvornik@suse.com
+
+- version 0.3
+- use product eol according to FATE#320699
+- adjust output
+
+-------------------------------------------------------------------
 Fri May 13 08:32:03 UTC 2016 - nadvornik@suse.com
 
 - version 0.2

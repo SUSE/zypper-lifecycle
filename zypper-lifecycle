@@ -6,6 +6,7 @@ require 'open3'
 require 'csv'
 require 'optparse'
 require 'optparse/time'
+require 'date'
 
 module SUSE
   module Zypper
@@ -35,9 +36,10 @@ module SUSE
           e.attributes.each { |name, value| h[name.to_sym] = value } # add attributes
           subpath.each do |sp|
             next if e.elements[sp].nil?
-            e.elements[sp].attributes.each { |name, value| h["#{sp}_#{name}".to_sym] = value } # add attributes of requested sub-elements
+            fsp = sp.gsub(/\//, '_')
+            e.elements[sp].attributes.each { |name, value| h["#{fsp}_#{name}".to_sym] = value } # add attributes of requested sub-elements
             if e.elements[sp].has_text?()
-              h["#{sp}".to_sym] = e.elements[sp].get_text()
+              h["#{fsp}".to_sym] = e.elements[sp].get_text().to_s
             end
           end
           h
@@ -68,7 +70,8 @@ module SUSE
         repo_alias[r[:name]] = r[:name]
       end
 
-      product_list = Zypper::xml_call("--no-refresh -x pd ", 'product-list', ['endoflife', 'registerflavor'])
+      product_list = Zypper::xml_call("--no-refresh -x pd --xmlfwd codestream", 'product-list',
+          ['endoflife', 'registerflavor', 'xmlfwd/codestream/name', 'xmlfwd/codestream/endoflife'])
 
       product_by_repo = {}
       @installed_products = {}
@@ -78,6 +81,15 @@ module SUSE
         else
           p[:endoflife_time_t] = p[:endoflife_time_t].to_i
           p[:endoflife_time_t] = NaTS if p[:endoflife_time_t] == 0
+        end
+        if !p.key?(:xmlfwd_codestream_endoflife)
+           p[:codestream_endoflife_time_t] = NeverTS
+        else
+          begin
+            p[:codestream_endoflife_time_t] = Date::parse(p[:xmlfwd_codestream_endoflife]).strftime("%s").to_i
+          rescue
+            p[:codestream_endoflife_time_t] = NaTS
+          end
         end
         repo = repo_alias[p[:repo]]
         product_by_repo[repo] = p

@@ -295,16 +295,21 @@ module SUSE
       if products.length > 0
         report_products(products, "end of support before #{date_str}")
       else
-        print "\nNo products with end of support before #{date_str}.\n"
+        print "\nNo products whose support ends before #{date_str}.\n"
       end
       packages = @installed_package.values.flatten.select {|p| p[:eol] && p[:eol] <= date_ts }
       if packages.length > 0
-        print "\nPackage end of support before #{date_str}:\n"
-        packages.sort_by.with_index { |p, idx| [p[:eol], idx] }.each do |p|
-          print_package(p) if p[:package_eol] || p[:update_edition]
+        dif_packages = packages.select {|p| p[:package_eol] || p[:update_edition] }
+        if dif_packages.length > 0
+          print "\nPackage end of support before #{date_str}:\n"
+          dif_packages.sort_by.with_index { |p, idx| [p[:eol], idx] }.each do |p|
+            print_package(p)
+          end
+        else
+          print "\nNo packages with end of support different from product.\n"
         end
       else
-        print "\nNo packages with end of support before #{date_str}.\n"
+        print "\nNo packages whose support ends before #{date_str}.\n"
       end
       print "\n*) See https://www.suse.com/lifecycle for latest information\n"
     end
@@ -321,10 +326,10 @@ options = {}
 OptionParser.new do |opts|
   opts.banner = "Usage: zypper lifecycle [ -v | --verbose ] --days N | --date <date> | <package> ..."
 
-  opts.on("--days N", Integer, "Show packages/products with end of support before N days from now") do |d|
+  opts.on("--days N", Integer, "Show packages/products whose support ends in N days (from now)") do |d|
     options[:date] = Time.now + d * 60 * 60 * 24
   end
-  opts.on("--date D", Time, "Show packages/products with end of support before D") do |d|
+  opts.on("--date YYYY-MM-DD", Time, "Show packages/products whose support ends before the specified date") do |d|
     options[:date] = d
   end
   opts.on("-v", "--[no-]verbose", "Run verbosely") do |v|

@@ -1,4 +1,11 @@
 -------------------------------------------------------------------
+Tue Sep 13 12:05:26 UTC 2016 - nadvornik@suse.com
+
+- version 0.4
+- handle codestream info (fate#320835)
+- clarify help text (bnc#981106)
+
+-------------------------------------------------------------------
 Tue Jul 26 10:43:22 UTC 2016 - nadvornik@suse.com
 
 - version 0.3

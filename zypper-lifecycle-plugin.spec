@@ -16,12 +16,12 @@
 #
 
 Name:           zypper-lifecycle-plugin
-Version:        0.3
+Version:        0.4
 Release:        0
-Requires:       zypper >= 1.13.5
+Requires:       zypper >= 1.13.10
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildRequires:  ruby-macros >= 5
-BuildRequires:  zypper >= 1.13.5
+BuildRequires:  zypper >= 1.13.10
 Source1:        zypper-lifecycle
 Source2:        zypper-lifecycle.8
 Summary:        Zypper subcommand for lifecycle information

@@ -91,6 +91,11 @@ module SUSE
             p[:codestream_endoflife_time_t] = NaTS
           end
         end
+        if p.key?(:xmlfwd_codestream_name)
+          p[:codestream_name] = p[:xmlfwd_codestream_name]
+        else
+          p[:codestream_name] = ''
+        end
         repo = repo_alias[p[:repo]]
         product_by_repo[repo] = p
         @installed_products[p[:name]] =  p if p[:installed] == "true"
@@ -228,9 +233,9 @@ module SUSE
     end
 
     def report_products(products, msg)
-      base_products = products.select{ |p| p[:isbase] == 'true'}.sort_by.with_index { |p, idx| [p[:xmlfwd_codestream_name], p[:endoflife_time_t].to_i, idx] }
-      modules = products.select{ |p| p[:registerflavor] == 'module'}.sort_by.with_index { |p, idx| [p[:xmlfwd_codestream_name], p[:endoflife_time_t].to_i, idx] }
-      extensions = products.select{ |p| p[:registerflavor] == 'extension'}.sort_by.with_index { |p, idx| [p[:xmlfwd_codestream_name], p[:endoflife_time_t].to_i, idx] }
+      base_products = products.select{ |p| p[:isbase] == 'true'}.sort_by.with_index { |p, idx| [p[:codestream_name], p[:endoflife_time_t].to_i, idx] }
+      modules = products.select{ |p| p[:registerflavor] == 'module'}.sort_by.with_index { |p, idx| [p[:codestream_name], p[:endoflife_time_t].to_i, idx] }
+      extensions = products.select{ |p| p[:registerflavor] == 'extension'}.sort_by.with_index { |p, idx| [p[:codestream_name], p[:endoflife_time_t].to_i, idx] }
 
       if base_products.length > 0
         printf("\n" + ProductFormatStr, "Product #{msg}", "")

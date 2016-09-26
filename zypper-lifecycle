@@ -296,7 +296,7 @@ module SUSE
       date_ts = date.strftime("%s").to_i
       date_str = Time.at(date_ts).strftime('%F')
 
-      products = @installed_products.values.select {|p| p[:endoflife_time_t] && p[:endoflife_time_t].to_i <= date_ts}
+      products = @installed_products.values.select {|p| p[:endoflife_time_t] && p[:endoflife_time_t].to_i <= date_ts or p[:codestream_endoflife_time_t] && p[:codestream_endoflife_time_t] <= date_ts}
       if products.length > 0
         report_products(products, "end of support before #{date_str}")
       else

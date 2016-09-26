@@ -1,4 +1,11 @@
 -------------------------------------------------------------------
+Mon Sep 26 09:01:46 UTC 2016 - nadvornik@suse.com
+
+- version 0.5
+- consider also codestream in date/days argument (bsc#999537)
+- handle missing codestream name (bsc#1000595)
+
+-------------------------------------------------------------------
 Tue Sep 13 12:05:26 UTC 2016 - nadvornik@suse.com
 
 - version 0.4

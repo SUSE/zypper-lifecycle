@@ -16,7 +16,7 @@
 #
 
 Name:           zypper-lifecycle-plugin
-Version:        0.4
+Version:        0.5
 Release:        0
 Requires:       zypper >= 1.13.10
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build

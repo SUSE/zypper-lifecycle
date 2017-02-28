@@ -205,6 +205,56 @@ module SUSE
       eol
     end
 
+    def load_already_reported(fn)
+      begin
+        File.open(fn, 'r') do |f|
+          doc = REXML::Document.new f
+
+          @report_since = Time.parse(doc.root.attributes['date'])
+
+          doc.root.elements.map do |e|
+            p = {}
+            e.attributes.each { |name, value| p[name.to_sym] = value }
+            if e.name == 'product'
+              if @installed_products[p[:name]][:endoflife_time_t] == p[:eol].to_i
+                @installed_products[p[:name]][:already_reported] = true
+              end
+            elsif e.name == 'package'
+              @installed_package[p[:name]].each do |ip|
+                if ip[:edition] == p[:edition] && ip[:eol] == p[:eol].to_i
+                  ip[:already_reported] = true
+                end
+              end
+            end
+          end
+        end
+      rescue Errno::ENOENT => e
+        print "#{e.message}\n" if @verbose
+      rescue Exception => e
+        print "\nError parsing #{fn}: #{e.message}\n"
+        @retval = 2
+      end
+    end
+
+    def save_report(fn, products, packages)
+      begin
+        doc = REXML::Document.new
+        report= doc.add_element 'report', {"date" => Time.now }
+        products.each do |p|
+          report.add_element "product", {"name" => p[:name], "eol" => p[:endoflife_time_t]}
+        end
+        packages.each do |p|
+          report.add_element "package", {"name" => p[:name], "edition" => p[:edition], "eol" => p[:eol]}
+        end
+        File.open(fn, 'w') do |f|
+          doc.write(f, 4)
+        end
+      rescue Exception => e
+        print "\nError saving #{fn}: #{e.message}\n"
+        @retval = 2
+      end
+    end
+
     def print_product(p)
       vendor_suse = Regexp.new("^SUSE").match(p[:vendor])
       if p.key?(:xmlfwd_codestream_name)
@@ -263,19 +313,40 @@ module SUSE
 
     end
 
-    def report()
-      report_products(@installed_products.values, "end of support")
+    def report(save_fn)
+      return if @retval > 0
+      if @report_since
+          print "Reporting changes since #{@report_since}\n"
+      end
 
-      packages = @installed_package.values.flatten.select {|p| p[:package_eol] || p[:update_edition] }
-      if packages.length > 0
+      products = @installed_products.values
+      print_products = products.select {|p| !p[:already_reported]}
+      if print_products.length > 0
+        report_products(print_products, "end of support")
+      else
+        print "\nNo products"
+        print " changed since #{@report_since}" if @report_since
+        print ".\n"
+      end
+
+      packages = @installed_package.values.flatten.select {|p| (p[:package_eol] || p[:update_edition]) }
+      print_packages = packages.select {|p| !p[:already_reported] }
+      if print_packages.length > 0
         print "\nPackage end of support if different from product:\n"
-        packages.sort_by.with_index { |p, idx| [p[:eol], idx] }.each do |p|
-          print_package(p) if p[:package_eol] || p[:update_edition]
+        print_packages.sort_by.with_index { |p, idx| [p[:eol], idx] }.each do |p|
+          print_package(p)
         end
       else
-        print "\nNo packages with end of support different from product.\n"
+        print "\nNo packages with end of support different from product"
+        print " changed since #{@report_since}" if @report_since
+        print ".\n"
       end
+
       print "\n*) See https://www.suse.com/lifecycle for latest information\n"
+
+      save_report(save_fn, @installed_products.values, packages) if save_fn
+
+      @retval = 1 if print_products.length == 0 && print_packages.length == 0
     end
 
     def report_packages(list)
@@ -292,22 +363,27 @@ module SUSE
       print "\n*) See http://www.suse.com/lifecycle for latest information\n"
     end
 
-    def report_deadline(date)
+    def report_deadline(date, save_fn)
+      if @report_since
+          print "Reporting changes since #{@report_since}\n"
+      end
       date_ts = date.strftime("%s").to_i
       date_str = Time.at(date_ts).strftime('%F')
 
-      products = @installed_products.values.select {|p| p[:endoflife_time_t] && p[:endoflife_time_t].to_i <= date_ts or p[:codestream_endoflife_time_t] && p[:codestream_endoflife_time_t] <= date_ts}
-      if products.length > 0
-        report_products(products, "end of support before #{date_str}")
+      products = @installed_products.values.select {|p| (p[:endoflife_time_t] && p[:endoflife_time_t].to_i <= date_ts or p[:codestream_endoflife_time_t] && p[:codestream_endoflife_time_t] <= date_ts)}
+      print_products = products.select {|p| !p[:already_reported]}
+      if print_products.length > 0
+        report_products(print_products, "end of support before #{date_str}")
       else
         print "\nNo products whose support ends before #{date_str}.\n"
       end
       packages = @installed_package.values.flatten.select {|p| p[:eol] && p[:eol] <= date_ts }
       if packages.length > 0
-        dif_packages = packages.select {|p| p[:package_eol] || p[:update_edition] }
-        if dif_packages.length > 0
+        dif_packages = packages.select {|p| (p[:package_eol] || p[:update_edition]) }
+        print_packages = dif_packages.select {|p| !p[:already_reported] }
+        if print_packages.length > 0
           print "\nPackage end of support before #{date_str}:\n"
-          dif_packages.sort_by.with_index { |p, idx| [p[:eol], idx] }.each do |p|
+          print_packages.sort_by.with_index { |p, idx| [p[:eol], idx] }.each do |p|
             print_package(p)
           end
         else
@@ -317,6 +393,10 @@ module SUSE
         print "\nNo packages whose support ends before #{date_str}.\n"
       end
       print "\n*) See https://www.suse.com/lifecycle for latest information\n"
+
+      save_report(save_fn, products, dif_packages) if save_fn
+
+      @retval = 1 if print_products.length == 0 && print_packages.length == 0
     end
 
     def exit_val()
@@ -329,13 +409,19 @@ end
 options = {}
 
 OptionParser.new do |opts|
-  opts.banner = "Usage: zypper lifecycle [ -v | --verbose ] --days N | --date <date> | <package> ..."
+  opts.banner = "Usage: zypper lifecycle [ -v | --verbose ] [--save <file>] --days N | --date <date> | --diff <file> | <package> ..."
 
   opts.on("--days N", Integer, "Show packages/products whose support ends in N days (from now)") do |d|
     options[:date] = Time.now + d * 60 * 60 * 24
   end
   opts.on("--date YYYY-MM-DD", Time, "Show packages/products whose support ends before the specified date") do |d|
     options[:date] = d
+  end
+  opts.on("--save <file>", String, "Save report to file") do |f|
+    options[:save] = f
+  end
+  opts.on("--diff <file>", String, "Report only differences from previouly saved report") do |f|
+    options[:diff] = f
   end
   opts.on("-v", "--[no-]verbose", "Run verbosely") do |v|
     options[:verbose] = v
@@ -348,11 +434,14 @@ lifecycle.load_lifecycle_data
 lifecycle.solve_package_eol
 
 if options[:date]
-  lifecycle.report_deadline(options[:date])
+  lifecycle.load_already_reported(options[:diff]) if options[:diff]
+  lifecycle.report_deadline(options[:date], options[:save])
 elsif ARGV.empty?
-  lifecycle.report
+  lifecycle.load_already_reported(options[:diff]) if options[:diff]
+  lifecycle.report(options[:save])
 else
   lifecycle.report_packages(ARGV)
 end
+
 
 lifecycle.exit_val

@@ -1,0 +1,20 @@
+#!/bin/sh
+
+STATUS_FILE=/var/lib/lifecycle/status.xml
+REPORT_FILE=/var/lib/lifecycle/report
+MAIL_SUBJ='Lifecycle report'
+MAIL_TO=root@localhost
+DAYS=14
+
+if [ -f /etc/sysconfig/lifecycle-report ] ; then
+  . /etc/sysconfig/lifecycle-report
+fi
+
+if [ -n "$DAYS" ] ; then
+  DAYS="--days $DAYS"
+fi
+
+/usr/lib/zypper/commands/zypper-lifecycle --diff "$STATUS_FILE" --save "$STATUS_FILE" $DAYS > "${REPORT_FILE}" && [ -n "${MAIL_TO}" ] && /usr/bin/mail -S sendwait -s "${MAIL_SUBJ}" "${MAIL_TO}" < "${REPORT_FILE}"
+
+/bin/true
+

@@ -1,0 +1,6 @@
+[Unit]
+Description=Report changes in product/package lifecycle
+
+[Service]
+Type=oneshot
+ExecStart=/usr/share/lifecycle/lifecycle-report

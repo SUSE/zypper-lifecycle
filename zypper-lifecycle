@@ -198,12 +198,18 @@ module SUSE
       end
     end
 
-    def eol_string(eol_ts, vendor_suse)
+    def eol_string(eol_ts, vendor)
       eol = ''
       eol = '-' if eol_ts == NeverTS
       if eol_ts == NaTS
         eol = 'n/a'
-        eol += '*' if vendor_suse
+        if Regexp.new("^SUSE").match(vendor)
+          eol += '*'
+          @vendor_suse = true
+        elsif Regexp.new("^openSUSE").match(vendor)
+          eol += '*'
+          @vendor_opensuse = true
+        end
       end
       eol = 'Now' if eol_ts == NowTS
       eol = Time.at(eol_ts).strftime('%F') if eol_ts && eol == ''
@@ -261,28 +267,28 @@ module SUSE
     end
 
     def print_product(p)
-      vendor_suse = Regexp.new("^SUSE").match(p[:vendor])
+      vendor = p[:vendor]
       if p.key?(:xmlfwd_codestream_name)
         if p[:xmlfwd_codestream_name] != @printed_codestream
-          printf(ProductFormatStr, "Codestream: " + p[:xmlfwd_codestream_name], eol_string(p[:codestream_endoflife_time_t], vendor_suse))
+          printf(ProductFormatStr, "Codestream: " + p[:xmlfwd_codestream_name], eol_string(p[:codestream_endoflife_time_t], vendor))
           @printed_codestream = p[:xmlfwd_codestream_name]
         end
-        printf(ProductFormatStr, "    " + p[:summary], eol_string(p[:endoflife_time_t], vendor_suse))
+        printf(ProductFormatStr, "    " + p[:summary], eol_string(p[:endoflife_time_t], vendor))
       else
-        printf(ProductFormatStr, p[:summary], eol_string(p[:endoflife_time_t], vendor_suse))
+        printf(ProductFormatStr, p[:summary], eol_string(p[:endoflife_time_t], vendor))
         @printed_codestream = nil
       end
     end
 
     def print_package(p)
-      vendor_suse = false
-      vendor_suse = true if p[:product] && Regexp.new("^SUSE").match(p[:product][:vendor])
-      eol = eol_string(p[:eol], vendor_suse)
+      vendor = ''
+      vendor = p[:product][:vendor] if p[:product]
+      eol = eol_string(p[:eol], vendor)
       up = ''
       if p[:update_edition]
         up = ", available update to #{p[:update_edition]}"
         up_eol = ''
-        up_eol = eol_string(p[:update_eol], vendor_suse) if p[:update_eol] && p[:update_eol] < NaTS
+        up_eol = eol_string(p[:update_eol], vendor) if p[:update_eol] && p[:update_eol] < NaTS
       end
       printf("%-55s %-40s %s\n", "#{p[:name]}-#{p[:edition]}", eol + up, up_eol)
     end
@@ -318,6 +324,12 @@ module SUSE
 
     end
 
+    def print_lifecycle_url()
+      print "\n*) See https://www.suse.com/lifecycle for latest information" if @vendor_suse
+      print "\n*) See https://en.opensuse.org/Lifetime for latest information" if @vendor_opensuse
+      print "\n"
+    end
+
     def report(save_fn)
       return if @retval > 0
       if @report_since
@@ -347,7 +359,7 @@ module SUSE
         print ".\n"
       end
 
-      print "\n*) See https://www.suse.com/lifecycle for latest information\n"
+      print_lifecycle_url()
 
       save_report(save_fn, @installed_products.values, packages) if save_fn
 
@@ -365,7 +377,7 @@ module SUSE
           p_list.each { |p| print_package(p) }
         end
       end
-      print "\n*) See http://www.suse.com/lifecycle for latest information\n"
+      print_lifecycle_url()
     end
 
     def report_deadline(date, save_fn)
@@ -397,7 +409,7 @@ module SUSE
       else
         print "\nNo packages whose support ends before #{date_str}.\n"
       end
-      print "\n*) See https://www.suse.com/lifecycle for latest information\n"
+      print_lifecycle_url()
 
       save_report(save_fn, products, dif_packages) if save_fn
 

@@ -142,30 +142,35 @@ module SUSE
 
     def load_lifecycle_data()
       @installed_products.values.each do |product|
-        file = "/var/lib/lifecycle/data/#{product[:name]}.lifecycle"
-        print "trying to load #{file}... " if @verbose
-        begin
-          CSV.foreach(file, {:skip_blanks => true, :skip_lines => /^\s*#/ }) do |line|
-            name, version, date = line.map(&:strip)
-            date = Time.parse(date).strftime("%s")
-            version_re = Regexp.new( '^' + Regexp.quote(version).gsub(/\\\*/, '.*') + '$')
-            #print "match #{name} #{version_re}\n"
-            (@installed_package[name] || []).each do |p|
-              #print "#{p}\n"
-              if version_re.match(p[:edition])
-                p[:package_eol] = date
-              end
-              if version_re.match(p[:update_edition])
-                p[:update_package_eol] = date
+        [
+          "/var/lib/lifecycle/data/#{product[:name]}.lifecycle",
+          "/usr/lib/lifecycle/data/#{product[:name]}.lifecycle",
+          "/usr/share/lifecycle/data/#{product[:name]}.lifecycle"
+        ].each do |file|
+          print "trying to load #{file}... " if @verbose
+          begin
+            CSV.foreach(file, {:skip_blanks => true, :skip_lines => /^\s*#/ }) do |line|
+              name, version, date = line.map(&:strip)
+              date = Time.parse(date).strftime("%s")
+              version_re = Regexp.new( '^' + Regexp.quote(version).gsub(/\\\*/, '.*') + '$')
+              #print "match #{name} #{version_re}\n"
+              (@installed_package[name] || []).each do |p|
+                #print "#{p}\n"
+                if version_re.match(p[:edition])
+                  p[:package_eol] = date
+                end
+                if version_re.match(p[:update_edition])
+                  p[:update_package_eol] = date
+                end
               end
             end
+            print "ok\n" if @verbose
+          rescue Errno::ENOENT => e
+            print "#{e.message}\n" if @verbose
+          rescue Exception => e
+            print "\nError parsing #{file}: #{e.message}\n"
+            @retval = 2
           end
-          print "ok\n" if @verbose
-        rescue Errno::ENOENT => e
-          print "#{e.message}\n" if @verbose
-        rescue Exception => e
-          print "\nError parsing #{file}: #{e.message}\n"
-          @retval = 2
         end
       end
     end

@@ -1,0 +1,18 @@
+## Path: System/Lifecycle
+## Description: Configuration for lifecycle-report.timer
+
+## Type:        string
+## Default:     "root@localhost"
+# Lifecycle reports are sent to this mail.
+MAIL_TO='root@localhost'
+
+## Type:        string
+## Default:     "root@localhost"
+# Mail subject.
+MAIL_SUBJ='Lifecycle report'
+
+## Type:        integer(0:)
+## Default:     14
+# Report DAYS days before end of support
+DAYS=14
+

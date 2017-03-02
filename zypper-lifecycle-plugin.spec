@@ -53,11 +53,14 @@ install -m 755 lifecycle-report %{buildroot}/usr/share/lifecycle/
 mkdir -p %{buildroot}/usr/lib/systemd/system
 install -m 644 lifecycle-report.service %{buildroot}%{_unitdir}
 install -m 644 lifecycle-report.timer %{buildroot}%{_unitdir}
+install -D -m 644 sysconfig.lifecycle-report %{buildroot}/var/adm/fillup-templates/sysconfig.lifecycle-report
+
 
 %pre
 %service_add_pre lifecycle-report.service lifecycle-report.timer
 
 %post
+%{fillup_only -n lifecycle-report}
 %service_add_post lifecycle-report.service lifecycle-report.timer
 
 %preun
@@ -73,5 +76,6 @@ install -m 644 lifecycle-report.timer %{buildroot}%{_unitdir}
 /var/lib/lifecycle
 %{_mandir}/man8/*
 %{_unitdir}/*
+/var/adm/fillup-templates/*
 
 %changelog

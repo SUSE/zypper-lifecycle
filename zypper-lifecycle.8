@@ -3,7 +3,7 @@
 .SH NAME
 zypper-lifecycle \- products and packages lifecycle information
 .SH SYNOPSIS
-zypper lifecycle [ -v | --verbose ] --days N | --date <date> | <package> ...
+zypper lifecycle [ -v | --verbose ] [--save <file>] [ --diff <file> ] --days N | --date <date> | <package> ...
 .SH DESCRIPTION
 zypper-lifecycle shows an overview of products and packages lifecycle
 .SH OPTIONS
@@ -14,10 +14,18 @@ Show packages/products whose support ends in N days (from now)
 .B --date YYYY-MM-DD
 Show packages/products whose support ends before the specified date
 .TP
+.B  --save <file>
+Save report to a file in machine-readable form. This file can be later used for --diff option.
+.TP
+.B  --diff <file>
+Report only differences from previouly saved report. This option can't be used
+together with explicit package names.
+.TP
 .B  -v, --[no-]verbose
 Run verbosely
 .SH RETURN VALUE
-zypper lifecycle returns 0 on success, 1 if some of queried packages are not installed and 2 on other errors.
+zypper lifecycle returns 0 on success, 1 if some of queried packages are not installed or if
+the report is empty and 2 on other errors.
 .SH SEE ALSO
 zypper(8)
 .SH BUGS

@@ -426,7 +426,7 @@ end
 options = {}
 
 OptionParser.new do |opts|
-  opts.banner = "Usage: zypper lifecycle [ -v | --verbose ] [--save <file>] --days N | --date <date> | --diff <file> | <package> ..."
+  opts.banner = "Usage: zypper lifecycle [ -v | --verbose ] [--save <file>] [ --diff <file> ] --days N | --date <date> | <package> ..."
 
   opts.on("--days N", Integer, "Show packages/products whose support ends in N days (from now)") do |d|
     options[:date] = Time.now + d * 60 * 60 * 24

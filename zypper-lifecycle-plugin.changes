@@ -1,4 +1,13 @@
 -------------------------------------------------------------------
+Thu Mar  2 13:34:03 UTC 2017 - nadvornik@suse.com
+
+- version 0.6
+- save state and report changes since saved state (fate#322059)
+- added systemd timer for periodical reports (fate#322059)
+- look for lifecycle data also in /usr (bsc#1014622)
+- support also openSUSE vendor (bsc#1014620)
+
+-------------------------------------------------------------------
 Mon Sep 26 09:01:46 UTC 2016 - nadvornik@suse.com
 
 - version 0.5

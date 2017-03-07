@@ -395,9 +395,9 @@ module SUSE
         print "\nNo products whose support ends before #{date_str}.\n"
       end
       packages = @installed_package.values.flatten.select {|p| p[:eol] && p[:eol] <= date_ts }
+      dif_packages = packages.select {|p| (p[:package_eol] || p[:update_edition]) }
+      print_packages = dif_packages.select {|p| !p[:already_reported] }
       if packages.length > 0
-        dif_packages = packages.select {|p| (p[:package_eol] || p[:update_edition]) }
-        print_packages = dif_packages.select {|p| !p[:already_reported] }
         if print_packages.length > 0
           print "\nPackage end of support before #{date_str}:\n"
           print_packages.sort_by.with_index { |p, idx| [p[:eol], idx] }.each do |p|

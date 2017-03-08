@@ -1,4 +1,9 @@
 -------------------------------------------------------------------
+Wed Mar  8 13:32:47 UTC 2017 - nadvornik@suse.com
+
+- fixed unhandled exception on empty package list (bsc#1028247#c1)
+
+-------------------------------------------------------------------
 Thu Mar  2 13:34:03 UTC 2017 - nadvornik@suse.com
 
 - version 0.6

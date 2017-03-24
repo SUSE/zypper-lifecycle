@@ -162,6 +162,7 @@ module SUSE
                 if version_re.match(p[:update_edition])
                   p[:update_package_eol] = date
                 end
+                p[:version_specified] = version
               end
             end
             print "ok\n" if @verbose
@@ -286,11 +287,15 @@ module SUSE
       eol = eol_string(p[:eol], vendor)
       up = ''
       if p[:update_edition]
-        up = ", available update to #{p[:update_edition]}"
+        up = ", installed #{p[:edition]}, update available #{p[:update_edition]}"
         up_eol = ''
         up_eol = eol_string(p[:update_eol], vendor) if p[:update_eol] && p[:update_eol] < NaTS
       end
-      printf("%-55s %-40s %s\n", "#{p[:name]}-#{p[:edition]}", eol + up, up_eol)
+      name = p[:name]
+      if p[:version_specified] && p[:version_specified] != '*'
+        name += "-#{p[:version_specified]}"
+      end
+      printf("%-40s %-40s %s\n", name, eol + up, up_eol)
     end
 
     def report_products(products, msg)

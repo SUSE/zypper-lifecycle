@@ -1,4 +1,9 @@
 -------------------------------------------------------------------
+Fri Mar 24 12:45:29 UTC 2017 - nadvornik@suse.com
+
+- do not show version number by default (fate#322212)
+
+-------------------------------------------------------------------
 Wed Mar  8 13:32:47 UTC 2017 - nadvornik@suse.com
 
 - fixed unhandled exception on empty package list (bsc#1028247#c1)

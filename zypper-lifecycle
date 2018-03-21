@@ -274,7 +274,7 @@ module SUSE
           printf(ProductFormatStr, "Codestream: " + p[:xmlfwd_codestream_name], eol_string(p[:codestream_endoflife_time_t], vendor))
           @printed_codestream = p[:xmlfwd_codestream_name]
         end
-        printf(ProductFormatStr, "    " + p[:summary], eol_string(p[:endoflife_time_t], vendor))
+        printf(ProductFormatStr, "    Product: " + p[:summary], eol_string(p[:endoflife_time_t], vendor))
       else
         printf(ProductFormatStr, p[:summary], eol_string(p[:endoflife_time_t], vendor))
         @printed_codestream = nil

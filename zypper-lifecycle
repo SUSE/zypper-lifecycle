@@ -12,6 +12,12 @@ module SUSE
   module Zypper
     class << self
 
+      def print_messages(xml_doc)
+        xml_doc.root.elements.each("message") do |e|
+          print e[0].value, "\n"
+        end
+      end
+
       def call(args, quiet = true)
         cmd = "zypper #{args}"
         output, error, status = Open3.capture3({ 'LC_ALL' => 'C' }, cmd) {|_stdin, stdout, _stderr, _wait_thr| stdout.read }
@@ -21,9 +27,18 @@ module SUSE
         # Catching interactive failures of zypper. --non-interactive always returns with exit code 0 here
         if !valid_exit_codes.include?(status.exitstatus) || error.include?('ABORT request')
           error = error.empty? ? output.strip : error.strip
-          print error
-#        e = (cmd.include? 'zypper') ? Connect::ZypperError.new(status.exitstatus, error) : Connect::SystemCallError
-#        raise e, error
+          begin
+            if error.start_with?("<?xml")
+              xml_doc = REXML::Document.new(error)
+              print_messages(xml_doc)
+              error = nil
+            end
+          rescue
+            # ignore
+          end
+
+          print "#{error}\n" if !error.nil?
+          exit(status.exitstatus)
         end
         output.strip unless quiet
       end

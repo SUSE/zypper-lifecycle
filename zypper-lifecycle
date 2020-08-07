@@ -164,7 +164,7 @@ module SUSE
         ].each do |file|
           print "trying to load #{file}... " if @verbose
           begin
-            CSV.foreach(file, {:skip_blanks => true, :skip_lines => /^\s*#/ }) do |line|
+            CSV.foreach(file, :skip_blanks => true, :skip_lines => /^\s*#/ ) do |line|
               name, version, date = line.map(&:strip)
               date = Time.parse(date).strftime("%s")
               version_re = Regexp.new( '^' + Regexp.quote(version).gsub(/\\\*/, '.*') + '$')

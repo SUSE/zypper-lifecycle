@@ -443,6 +443,9 @@ module SUSE
   end
 end
 
+# handle all times in UTC (bsc#1143453)
+ENV['TZ'] = "UTC"
+
 options = {}
 
 OptionParser.new do |opts|

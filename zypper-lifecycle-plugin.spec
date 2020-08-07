@@ -1,7 +1,7 @@
 #
-# spec file for package zypper-lifecycle
+# spec file for package zypper-lifecycle-plugin
 #
-# Copyright (c) 2015 SUSE LINUX Products GmbH, Nuernberg, Germany.
+# Copyright (c) 2020 SUSE LINUX GmbH, Nuernberg, Germany.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -15,16 +15,22 @@
 # Please submit bugfixes or comments via http://bugs.opensuse.org/
 #
 
+
+#Compat macro for new _fillupdir macro introduced in Nov 2017
+%if ! %{defined _fillupdir}
+  %define _fillupdir /var/adm/fillup-templates
+%endif
+
 Name:           zypper-lifecycle-plugin
-URL:            https://github.com/SUSE/zypper-lifecycle
-Version:        0.6
+Url:            https://github.com/SUSE/zypper-lifecycle
+Version:        0.6.1490613702.a925823
 Release:        0
 Requires:       zypper >= 1.13.10
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildRequires:  ruby-macros >= 5
 BuildRequires:  zypper >= 1.13.10
 %if 0%{?suse_version} >= 1210
-BuildRequires: systemd-rpm-macros
+BuildRequires:  systemd-rpm-macros
 %endif
 %{?systemd_requires}
 
@@ -53,8 +59,7 @@ install -m 755 lifecycle-report %{buildroot}/usr/share/lifecycle/
 mkdir -p %{buildroot}/usr/lib/systemd/system
 install -m 644 lifecycle-report.service %{buildroot}%{_unitdir}
 install -m 644 lifecycle-report.timer %{buildroot}%{_unitdir}
-install -D -m 644 sysconfig.lifecycle-report %{buildroot}/var/adm/fillup-templates/sysconfig.lifecycle-report
-
+install -D -m 644 sysconfig.lifecycle-report %{buildroot}%{_fillupdir}/sysconfig.lifecycle-report
 
 %pre
 %service_add_pre lifecycle-report.service lifecycle-report.timer
@@ -76,6 +81,6 @@ install -D -m 644 sysconfig.lifecycle-report %{buildroot}/var/adm/fillup-templat
 /var/lib/lifecycle
 %{_mandir}/man8/*
 %{_unitdir}/*
-/var/adm/fillup-templates/*
+%{_fillupdir}/*
 
 %changelog

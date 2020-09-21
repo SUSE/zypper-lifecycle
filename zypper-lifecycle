@@ -169,7 +169,14 @@ module SUSE
               date = Time.parse(date).strftime("%s")
               version_re = Regexp.new( '^' + Regexp.quote(version).gsub(/\\\*/, '.*') + '$')
               #print "match #{name} #{version_re}\n"
-              (@installed_package[name] || []).each do |p|
+              if name.include? "*"
+                name_re = Regexp.new( '^' + Regexp.quote(name).gsub(/\\\*/, '.*') + '$')
+                matching_names = @installed_package.keys.select { |p| name_re.match(p) }
+                matching_installed = matching_names.map { |p| @installed_package[p] }.flatten(1)
+              else
+                matching_installed = @installed_package[name]
+              end
+              (matching_installed || []).each do |p|
                 #print "#{p}\n"
                 if version_re.match(p[:edition])
                   p[:package_eol] = date

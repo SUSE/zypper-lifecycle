@@ -116,9 +116,9 @@ module SUSE
         @installed_products[p[:name]] =  p if p[:installed] == "true"
       end
 
-      package_list = Zypper::xml_call("--no-refresh -x se -s -t package", 'search-result/solvable-list')
+      @all_packages = Zypper::xml_call("--no-refresh -x se -s -t package", 'search-result/solvable-list')
       @installed_package = {}
-      package_list.each do |p|
+      @all_packages.each do |p|
         if p[:kind] == 'package' && p[:status] == 'installed'
           @installed_package[p[:name]] ||= []
           @installed_package[p[:name]] << p
@@ -144,7 +144,7 @@ module SUSE
         end
       end
 
-      package_list.each do |p|
+      @all_packages.each do |p|
         p[:product] = product_by_repo[p[:repository]]
       end
 
@@ -156,6 +156,8 @@ module SUSE
     end
 
     def load_lifecycle_data()
+      @lifecycle_data = []
+      @successors = {}
       @installed_products.values.each do |product|
         [
           "/var/lib/lifecycle/data/#{product[:name]}.lifecycle",
@@ -165,20 +167,8 @@ module SUSE
           print "trying to load #{file}... " if @verbose
           begin
             CSV.foreach(file, :skip_blanks => true, :skip_lines => /^\s*#/ ) do |line|
-              name, version, date = line.map(&:strip)
-              date = Time.parse(date).strftime("%s")
-              version_re = Regexp.new( '^' + Regexp.quote(version).gsub(/\\\*/, '.*') + '$')
-              #print "match #{name} #{version_re}\n"
-              (@installed_package[name] || []).each do |p|
-                #print "#{p}\n"
-                if version_re.match(p[:edition])
-                  p[:package_eol] = date
-                end
-                if version_re.match(p[:update_edition])
-                  p[:update_package_eol] = date
-                end
-                p[:version_specified] = version
-              end
+              line.each{ |f| f = "" unless f; f.strip! }
+              @lifecycle_data.append(line)
             end
             print "ok\n" if @verbose
           rescue Errno::ENOENT => e
@@ -188,6 +178,93 @@ module SUSE
             @retval = 2
           end
         end
+      end
+      parse_lifecycle_data(1)
+      # currenly we do not print successor EOL, so second pass is not needed
+      # parse_lifecycle_data(2)
+    end
+
+
+    def parse_lifecycle_data(pass)
+      if pass==1
+        target_hash = @installed_package
+      else
+        target_hash = @successors
+      end
+      @lifecycle_data.each do |line|
+        begin
+          name, version, date, successor = line
+
+          if !date || date.empty?
+            date = nil
+          else
+            date = Time.parse(date).strftime("%s")
+          end
+          version_re = Regexp.new( '^' + Regexp.quote(version).gsub(/\\\*/, '.*') + '$')
+          #print "match #{name} #{version_re}\n"
+          name_re = nil
+          if name.start_with?("/") && name.end_with?("/")
+            name_re = Regexp.new(name[1..-2])
+            matching_names = target_hash.keys.select { |p| name_re.match(p) }
+            matching_installed = matching_names.map { |p| target_hash[p] }.flatten(1)
+          elsif name.include? "*"
+            name_re = Regexp.new( '^' + Regexp.quote(name).gsub(/\\\*/, '(.*)') + '$')
+            matching_names = target_hash.keys.select { |p| name_re.match(p) }
+            matching_installed = matching_names.map { |p| target_hash[p] }.flatten(1)
+          else
+            matching_installed = target_hash[name]
+          end
+          (matching_installed || []).each do |p|
+            if version_re.match(p[:edition])
+              p[:package_eol] = date
+            end
+            if version_re.match(p[:update_edition])
+              p[:update_package_eol] = date
+            end
+            p[:version_specified] = version
+
+            if pass == 1 && successor
+              handle_successor(p, successor, name_re)
+            end
+          end
+        rescue Exception => e
+          print "\nError parsing #{line}: #{e.message}\n"
+            @retval = 2
+        end
+      end
+    end
+
+    def handle_successor(package, successor, name_re)
+      matches = [package[:name]]
+      if name_re
+          m = name_re.match(package[:name])
+          matches += m.captures if m
+      end
+      if successor.start_with?("/") && successor.end_with?("/")
+          successor_re = successor[1..-2]
+      else
+          successor_re = '^' + Regexp.quote(successor).gsub(/\\\*/, '.*') + '$'
+      end
+      for i in 0..9
+          successor_re.gsub!(/<#{i}>/, Regexp.quote(matches[i] || ''))
+      end
+      successor_re = Regexp.new(successor_re)
+      matching_successors = @all_packages.select { |s| successor_re.match(s[:name]) && package[:name] != s[:name] && package[:arch] == s[:arch] }
+
+      # select the successor with highest version
+      successor_version = package[:edition]
+      successor_pkg = nil
+      matching_successors.each do |s|
+        if Gem::Version.new(s[:edition]) > Gem::Version.new(successor_version)
+          successor_pkg = s
+          successor_version = s[:edition]
+        end
+      end
+
+      if successor_pkg
+        package[:successor] = successor_pkg
+        @successors[successor_pkg[:name]] ||= []
+        @successors[successor_pkg[:name]] << successor_pkg
       end
     end
 
@@ -210,6 +287,10 @@ module SUSE
           up_eol = p[:update_package_eol] if p[:update_package_eol] # eol specified in lifecycle file
           up_eol = p[:product][:endoflife_time_t] if !up_eol && p[:product] && p[:product][:endoflife_time_t] # default to product eol
           p[:update_eol] = up_eol.to_i if up_eol
+        end
+
+        if p[:successor]
+          p[:eol] = NowTS
         end
       end
     end
@@ -301,7 +382,10 @@ module SUSE
       vendor = p[:product][:vendor] if p[:product]
       eol = eol_string(p[:eol], vendor)
       up = ''
-      if p[:update_edition]
+      if p[:successor]
+        up = ", installed #{p[:edition]}, successor available #{p[:successor][:name]}-#{p[:successor][:edition]}"
+        up_eol = ''
+      elsif p[:update_edition]
         up = ", installed #{p[:edition]}, update available #{p[:update_edition]}"
         up_eol = ''
         up_eol = eol_string(p[:update_eol], vendor) if p[:update_eol] && p[:update_eol] < NaTS
@@ -366,7 +450,7 @@ module SUSE
         print ".\n"
       end
 
-      packages = @installed_package.values.flatten.select {|p| (p[:package_eol] || p[:update_edition]) }
+      packages = @installed_package.values.flatten.select {|p| (p[:package_eol] || p[:update_edition] || p[:successor]) }
       print_packages = packages.select {|p| !p[:already_reported] }
       if print_packages.length > 0
         print "\nPackage end of support if different from product:\n"
@@ -415,7 +499,7 @@ module SUSE
         print "\nNo products whose support ends before #{date_str}.\n"
       end
       packages = @installed_package.values.flatten.select {|p| p[:eol] && p[:eol] <= date_ts }
-      dif_packages = packages.select {|p| (p[:package_eol] || p[:update_edition]) }
+      dif_packages = packages.select {|p| (p[:package_eol] || p[:update_edition] || p[:successor]) }
       print_packages = dif_packages.select {|p| !p[:already_reported] }
       if packages.length > 0
         if print_packages.length > 0

@@ -1,7 +1,36 @@
 # test data for SLES product
-# this should be installed in /var/lib/lifecycle/data/SLES.lifecycle
-# format: name,version,date
+# this should be installed in /usr/share/lifecycle/data/SLES.lifecycle
+# format: name,version,date,successor
+# successor is optional
+# date can be empty if successor is specified
+
 # version can contain wildcard character *
 
 aaa_base,       13.2*,           2016-05-05
-kernel-default, 3.12.51-60.25.1, 2016-05-01
+
+
+# Name can contain wildcard character *
+
+kernel-*, 3.12.51-60.25.1, 2016-05-01
+
+# or it can be specified as regexp enclosed in / /
+# See Ruby documentation for regexp syntax.
+# Typically the regexp should match whole name,
+# so ^ and $ should be used
+
+/^kernel-.*$/, 3.12.51-60.25.1, 2016-05-01
+
+# Successor specifies a package that replaces the given package
+# when available - jsc#SLE-16356
+#
+# Successor use the same syntax as name, additionally
+# it can reference matching groups from name with "<1>", "<2>" etc.
+# the groups are generated from wildcards, in regexp they must be
+# marked with ( )
+
+# the following 4 lines are equivalent
+
+hdf5_*-gnu*-hpc,         *, , hdf5_*-gnu<2>-hpc
+hdf5_*-gnu*-hpc,         *, , /^hdf5_(.*)-gnu<2>-hpc$/
+/^hdf5_.*-gnu(.*)-hpc$/, *, , hdf5_*-gnu<1>-hpc
+/^hdf5_.*-gnu(.*)-hpc$/, *, , /^hdf5_(.*)-gnu<1>-hpc$/

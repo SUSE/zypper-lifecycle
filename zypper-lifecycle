@@ -443,7 +443,7 @@ module SUSE
       products = @installed_products.values
       print_products = products.select {|p| !p[:already_reported]}
       if print_products.length > 0
-        report_products(print_products, "end of support")
+        report_products(print_products, "end of general support")
       else
         print "\nNo products"
         print " changed since #{@report_since}" if @report_since
@@ -494,7 +494,7 @@ module SUSE
       products = @installed_products.values.select {|p| (p[:endoflife_time_t] && p[:endoflife_time_t].to_i <= date_ts or p[:codestream_endoflife_time_t] && p[:codestream_endoflife_time_t] <= date_ts)}
       print_products = products.select {|p| !p[:already_reported]}
       if print_products.length > 0
-        report_products(print_products, "end of support before #{date_str}")
+        report_products(print_products, "end of general support before #{date_str}")
       else
         print "\nNo products whose support ends before #{date_str}.\n"
       end
